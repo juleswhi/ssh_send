@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"os"
 	"os/exec"
+	"os/user"
+	"path/filepath"
 
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
@@ -82,6 +84,8 @@ func NewInput() Model {
 
 		menuItems: []string{
 			"notify",
+			"ssh key",
+			"typing", // new option
 		},
 		menuCursor: 0,
 	}
@@ -98,17 +102,18 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 
-	// Global quit
-	switch msg := msg.(type) {
-	case tea.KeyMsg:
-		if msg.String() == "ctrl+c" {
+	// Global quit (Ctrl+C)
+	if km, ok := msg.(tea.KeyMsg); ok {
+		if km.String() == "ctrl+c" {
 			return m, tea.Quit
 		}
 	}
 
 	switch m.stage {
 
-
+	// -----------------------------------
+	// PASSWORD SCREEN
+	// -----------------------------------
 	case stagePassword:
 		switch msg := msg.(type) {
 		case tea.KeyMsg:
@@ -126,12 +131,13 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.passInput, cmd = m.passInput.Update(msg)
 		return m, cmd
 
-
+	// -----------------------------------
+	// MENU SCREEN
+	// -----------------------------------
 	case stageMenu:
 		switch msg := msg.(type) {
 		case tea.KeyMsg:
 			switch msg.String() {
-
 			case "up":
 				if m.menuCursor > 0 {
 					m.menuCursor--
@@ -143,16 +149,34 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 			case "enter":
 				switch m.menuCursor {
-				case 0: // Notify
+
+				case 0: // notify
 					m.stage = stageEditor
 					m.title.Focus()
+
+				case 1: // ssh key
+					key, err := readSSHKey()
+					m.output = key
+					m.err = err
+					m.stage = stageDone
+
+				case 2: // typing (launch thokr)
+					err := runThokr()
+					if err != nil {
+						m.output = "Error running thokr: " + err.Error()
+					} else {
+						m.output = "Exited typing."
+					}
+					m.stage = stageDone
 				}
 				return m, nil
 			}
 		}
 		return m, nil
 
-
+	// -----------------------------------
+	// EDITOR (notify form)
+	// -----------------------------------
 	case stageEditor:
 		switch msg := msg.(type) {
 		case tea.KeyMsg:
@@ -199,9 +223,11 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		return m, nil
 
-
+	// -----------------------------------
+	// DONE (output shown)
+	// -----------------------------------
 	case stageDone:
-		return m, tea.Quit
+		return m, nil
 	}
 
 	return m, nil
@@ -224,7 +250,9 @@ func (m *Model) updateFocus() (tea.Model, tea.Cmd) {
 func (m Model) View() string {
 	switch m.stage {
 
-
+	// -----------------------
+	// PASSWORD
+	// -----------------------
 	case stagePassword:
 		box := lipgloss.NewStyle().Width(40).Align(lipgloss.Center).Render(m.passInput.View())
 		return lipgloss.Place(
@@ -233,6 +261,9 @@ func (m Model) View() string {
 			box,
 		)
 
+	// -----------------------
+	// MENU
+	// -----------------------
 	case stageMenu:
 		var items string
 		for i, item := range m.menuItems {
@@ -249,7 +280,9 @@ func (m Model) View() string {
 			items,
 		)
 
-
+	// -----------------------
+	// EDITOR (notify screen)
+	// -----------------------
 	case stageEditor:
 		submit := submitStyle.Render("->")
 		if m.focus == focusSubmit {
@@ -270,21 +303,28 @@ func (m Model) View() string {
 			ui,
 		)
 
-	// -----------------------------------------------------
-	// DONE
-	// -----------------------------------------------------
-
+	// -----------------------
+	// DONE SCREEN
+	// -----------------------
 	case stageDone:
+		out := m.output
+		if m.err != nil {
+			out = "Error:\n" + m.err.Error()
+		}
+
 		return lipgloss.Place(
 			m.terminalWidth, m.terminalHeight,
 			lipgloss.Center, lipgloss.Center,
-			"Press Ctrl+C to exit.",
+			out+"\n\nPress Ctrl+C to exit.",
 		)
 	}
 
 	return ""
 }
 
+// ---------------------------------------------------------
+// SCRIPT EXECUTION
+// ---------------------------------------------------------
 func runShellScript(title string, body string) (string, error) {
 	script_path := os.Getenv("SCRIPT_PATH")
 	cmd := exec.Command(script_path, title, body)
@@ -295,5 +335,36 @@ func runShellScript(title string, body string) (string, error) {
 
 	err := cmd.Run()
 	return out.String(), err
+}
+
+// ---------------------------------------------------------
+// SSH KEY READING
+// ---------------------------------------------------------
+func readSSHKey() (string, error) {
+	usr, err := user.Current()
+	if err != nil {
+		return "", err
+	}
+
+	keyPath := filepath.Join(usr.HomeDir, ".ssh", "id_ed25519.pub")
+
+	data, err := os.ReadFile(keyPath)
+	if err != nil {
+		return "", err
+	}
+
+	return string(data), nil
+}
+
+// ---------------------------------------------------------
+// RUN THOKR (typing TUI app)
+// ---------------------------------------------------------
+func runThokr() error {
+	cmd := exec.Command("thokr") // assumes thokr is installed and in PATH
+	cmd.Stdin = os.Stdin
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+
+	return cmd.Run()
 }
 
