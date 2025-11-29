@@ -22,12 +22,13 @@ import (
 const (
 	host = "localhost"
 	port = "2000"
+	host_key = "$HOME/.ssh/id_ed25519"
 )
 
 func Init() {
 	s, err := wish.NewServer(
 		wish.WithAddress(net.JoinHostPort(host, port)),
-		wish.WithHostKeyPath("/home/callum/.ssh/id_ed25519"),
+		wish.WithHostKeyPath(host_key),
 		wish.WithMiddleware(
 			bubbletea.Middleware(teaHandler),
 			activeterm.Middleware(),

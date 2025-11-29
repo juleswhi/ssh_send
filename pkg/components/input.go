@@ -122,12 +122,11 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 			case "enter":
 				if m.focus == focusSubmit {
-					// Submit pressed!
 					out, err := runShellScript(m.title.Value(), m.body.Value())
 					m.output = out
 					m.err = err
 					m.stage = stageDone
-					return m, nil
+					return m, tea.Quit
 				}
 			}
 		}
@@ -186,13 +185,7 @@ func (m Model) View() string {
 			btn = "push ?"
 		}
 
-		return (
-			"\n Authorized\n\n" +
-				"Title:\n" +
-				m.title.View() + "\n\n" +
-				"Body:\n" +
-				m.body.View() + "\n\n" +
-				btn)
+		return (btn)
 
 	case stageDone:
 		msg := "\nScript executed.\n\nOutput:\n" + m.output
