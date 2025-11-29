@@ -23,6 +23,7 @@ type stage int
 
 const (
 	stagePassword stage = iota
+	stageMenu
 	stageEditor
 	stageDone
 )
@@ -41,6 +42,11 @@ type Model struct {
 
 	passInput textinput.Model
 
+	// Menu
+	menuItems  []string
+	menuCursor int
+
+	// Form fields
 	title textinput.Model
 	body  textinput.Model
 
@@ -67,106 +73,139 @@ func NewInput() Model {
 	body.Placeholder = "body"
 	body.Width = 50
 
-	return Model {
+	return Model{
 		stage:     stagePassword,
 		passInput: pass,
 		title:     title,
 		body:      body,
 		focus:     focusTitle,
+
+		menuItems: []string{
+			"notify",
+		},
+		menuCursor: 0,
 	}
 }
 
 func (m Model) Init() tea.Cmd { return textinput.Blink }
 
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
-    switch msg := msg.(type) {
+	switch msg := msg.(type) {
 
-    case tea.WindowSizeMsg:
-        m.terminalWidth = msg.Width
-        m.terminalHeight = msg.Height
-        return m, nil
-    }
+	case tea.WindowSizeMsg:
+		m.terminalWidth = msg.Width
+		m.terminalHeight = msg.Height
+		return m, nil
+	}
 
-    switch msg := msg.(type) {
-    case tea.KeyMsg:
-        switch msg.String() {
-		case "ctrl+c":
-            return m, tea.Quit
-        }
-    }
+	// Global quit
+	switch msg := msg.(type) {
+	case tea.KeyMsg:
+		if msg.String() == "ctrl+c" {
+			return m, tea.Quit
+		}
+	}
 
-    switch m.stage {
+	switch m.stage {
 
-    case stagePassword:
-        switch msg := msg.(type) {
-        case tea.KeyMsg:
-            if msg.String() == "enter" {
+
+	case stagePassword:
+		switch msg := msg.(type) {
+		case tea.KeyMsg:
+			if msg.String() == "enter" {
 				phrase := os.Getenv("CORRECT_PHRASE")
-                if m.passInput.Value() == phrase {
-                    m.stage = stageEditor
-                    m.title.Focus()
-                    return m, textinput.Blink
-                }
-                m.passInput.SetValue("")
-                m.passInput.Placeholder = "!?"
-            }
-        }
-        var cmd tea.Cmd
-        m.passInput, cmd = m.passInput.Update(msg)
-        return m, cmd
+				if m.passInput.Value() == phrase {
+					m.stage = stageMenu
+					return m, nil
+				}
+				m.passInput.SetValue("")
+				m.passInput.Placeholder = "!?"
+			}
+		}
+		var cmd tea.Cmd
+		m.passInput, cmd = m.passInput.Update(msg)
+		return m, cmd
 
-    case stageEditor:
-        switch msg := msg.(type) {
-        case tea.KeyMsg:
-            switch msg.String() {
-            case "tab", "shift+tab":
-                if msg.String() == "tab" {
-                    m.focus++
-                } else {
-                    m.focus--
-                }
 
-                if m.focus < 0 {
-                    m.focus = focusMax - 1
-                }
-                if m.focus >= focusMax {
-                    m.focus = 0
-                }
+	case stageMenu:
+		switch msg := msg.(type) {
+		case tea.KeyMsg:
+			switch msg.String() {
 
-                return m.updateFocus()
+			case "up":
+				if m.menuCursor > 0 {
+					m.menuCursor--
+				}
+			case "down":
+				if m.menuCursor < len(m.menuItems)-1 {
+					m.menuCursor++
+				}
 
-            case "enter":
-                if m.focus == focusSubmit {
-                    out, err := runShellScript(m.title.Value(), m.body.Value())
-                    m.output = out
-                    m.err = err
-                    m.stage = stageDone
-                    return m, nil
-                }
-            }
-        }
+			case "enter":
+				switch m.menuCursor {
+				case 0: // Notify
+					m.stage = stageEditor
+					m.title.Focus()
+				}
+				return m, nil
+			}
+		}
+		return m, nil
 
-        switch m.focus {
-        case focusTitle:
-            var cmd tea.Cmd
-            m.title, cmd = m.title.Update(msg)
-            return m, cmd
 
-        case focusBody:
-            var cmd tea.Cmd
-            m.body, cmd = m.body.Update(msg)
-            return m, cmd
-        }
+	case stageEditor:
+		switch msg := msg.(type) {
+		case tea.KeyMsg:
+			switch msg.String() {
 
-        return m, nil
+			case "tab", "shift+tab":
+				if msg.String() == "tab" {
+					m.focus++
+				} else {
+					m.focus--
+				}
 
-    case stageDone:
-        return m, tea.Quit
-    }
+				if m.focus < 0 {
+					m.focus = focusMax - 1
+				}
+				if m.focus >= focusMax {
+					m.focus = 0
+				}
 
-    return m, nil
+				return m.updateFocus()
+
+			case "enter":
+				if m.focus == focusSubmit {
+					out, err := runShellScript(m.title.Value(), m.body.Value())
+					m.output = out
+					m.err = err
+					m.stage = stageDone
+					return m, nil
+				}
+			}
+		}
+
+		switch m.focus {
+		case focusTitle:
+			var cmd tea.Cmd
+			m.title, cmd = m.title.Update(msg)
+			return m, cmd
+
+		case focusBody:
+			var cmd tea.Cmd
+			m.body, cmd = m.body.Update(msg)
+			return m, cmd
+		}
+
+		return m, nil
+
+
+	case stageDone:
+		return m, tea.Quit
+	}
+
+	return m, nil
 }
-
 
 func (m *Model) updateFocus() (tea.Model, tea.Cmd) {
 	m.title.Blur()
@@ -185,6 +224,7 @@ func (m *Model) updateFocus() (tea.Model, tea.Cmd) {
 func (m Model) View() string {
 	switch m.stage {
 
+
 	case stagePassword:
 		box := lipgloss.NewStyle().Width(40).Align(lipgloss.Center).Render(m.passInput.View())
 		return lipgloss.Place(
@@ -192,6 +232,23 @@ func (m Model) View() string {
 			lipgloss.Center, lipgloss.Center,
 			box,
 		)
+
+	case stageMenu:
+		var items string
+		for i, item := range m.menuItems {
+			cursor := " "
+			if i == m.menuCursor {
+				cursor = ">"
+			}
+			items += cursor + " " + item + "\n"
+		}
+
+		return lipgloss.Place(
+			m.terminalWidth, m.terminalHeight,
+			lipgloss.Center, lipgloss.Center,
+			items,
+		)
+
 
 	case stageEditor:
 		submit := submitStyle.Render("->")
@@ -212,6 +269,10 @@ func (m Model) View() string {
 			lipgloss.Center, lipgloss.Center,
 			ui,
 		)
+
+	// -----------------------------------------------------
+	// DONE
+	// -----------------------------------------------------
 
 	case stageDone:
 		return lipgloss.Place(
