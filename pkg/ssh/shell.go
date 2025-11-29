@@ -22,7 +22,7 @@ import (
 const (
 	host = "localhost"
 	port = "2000"
-	host_key = "$HOME/.ssh/id_ed25519"
+	host_key = "/home/callum/.ssh/id_ed25519"
 )
 
 func Init() {
@@ -68,7 +68,7 @@ func Init() {
 func teaHandler(s ssh.Session) (tea.Model, []tea.ProgramOption) {
     _ = bubbletea.MakeRenderer(s)
 
-    m := components.NewSecureInput()
+    m := components.NewInput()
 
     return m, []tea.ProgramOption{tea.WithAltScreen()}
 }
