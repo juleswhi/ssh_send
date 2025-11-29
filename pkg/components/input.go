@@ -216,15 +216,10 @@ func (m Model) View() string {
 		)
 
 	case stageDone:
-		msg := m.output
-		if m.err != nil {
-			msg += "\n\nError:\n" + m.err.Error()
-		}
-
 		return lipgloss.Place(
 			m.terminalWidth, m.terminalHeight,
 			lipgloss.Center, lipgloss.Center,
-			msg+"\n\nPress Ctrl+C to exit.",
+			"Press Ctrl+C to exit.",
 		)
 	}
 
