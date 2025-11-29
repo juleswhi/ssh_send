@@ -2,16 +2,13 @@ package components
 
 import (
 	"bytes"
+	"os"
 	"os/exec"
 
-	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/bubbles/textinput"
+	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 )
-
-const correctPhrase = "open-sesame"
-const script_path = "./run.sh"
-
 
 var (
 	submitStyle = lipgloss.NewStyle().
@@ -104,7 +101,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
         switch msg := msg.(type) {
         case tea.KeyMsg:
             if msg.String() == "enter" {
-                if m.passInput.Value() == correctPhrase {
+				phrase := os.Getenv("CORRECT_PHRASE")
+                if m.passInput.Value() == phrase {
                     m.stage = stageEditor
                     m.title.Focus()
                     return m, textinput.Blink
@@ -227,6 +225,7 @@ func (m Model) View() string {
 }
 
 func runShellScript(title string, body string) (string, error) {
+	script_path := os.Getenv("SCRIPT_PATH")
 	cmd := exec.Command(script_path, title, body)
 
 	var out bytes.Buffer

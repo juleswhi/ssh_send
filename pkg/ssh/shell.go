@@ -19,13 +19,11 @@ import (
 	"github.com/juleswhi/yoshimi/pkg/components"
 )
 
-const (
-	host = "localhost"
-	port = "2000"
-	host_key = "/home/callum/.ssh/id_ed25519"
-)
-
 func Init() {
+	host := os.Getenv("HOST")
+	port := os.Getenv("PORT")
+	host_key := os.Getenv("HOST_KEY")
+
 	s, err := wish.NewServer(
 		wish.WithAddress(net.JoinHostPort(host, port)),
 		wish.WithHostKeyPath(host_key),
