@@ -65,9 +65,10 @@ func Init() {
 }
 
 func teaHandler(s ssh.Session) (tea.Model, []tea.ProgramOption) {
-	_ = bubbletea.MakeRenderer(s)
+    _ = bubbletea.MakeRenderer(s)
 
-	m := components.CreateHome("Callum White", "Edinburgh, UK", "Backend Developer", "Currently Taking A-Levels")
+    m := components.NewSecureInput()
 
-	return m, []tea.ProgramOption{tea.WithAltScreen()}
+    return m, []tea.ProgramOption{tea.WithAltScreen()}
 }
+
